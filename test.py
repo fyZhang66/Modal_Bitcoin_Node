@@ -15,6 +15,34 @@ bitcoind_image = modal.Image.from_dockerfile("./Dockerfile")
 rpc_user = "bitcoinrpc"
 rpc_password = "supersecurepassword"
 
+# 公共的装饰器参数
+function_params = {
+    "image": bitcoind_image,
+    "volumes": {"/root/.bitcoin": bitcoin_data_vol},
+}
+
+# ✅ 读取 Tunnel URL
+def read_tunnel_url():
+    bitcoin_data_vol.reload()  # ✅ 先确保 Volume 最新
+    with open("/root/.bitcoin/tunnel_url.txt", "r") as f:
+        rpc_url = f.read().strip()
+        print(f"✅ 读取 Tunnel URL: {rpc_url}")
+    return rpc_url
+
+# ✅ 发送 RPC 请求
+def send_rpc_request(rpc_url, method, params=[]):
+    response = requests.post(
+        rpc_url,
+        auth=(rpc_user, rpc_password),
+        json={
+            "jsonrpc": "1.0",
+            "id": method,
+            "method": method,
+            "params": params
+        }
+    )
+    return response
+
 @app.function(
     image=bitcoind_image,
     volumes={"/root/.bitcoin": bitcoin_data_vol},
@@ -41,71 +69,25 @@ def run_bitcoind():
             print("✅ bitcoind is running...")
             time.sleep(60)
 
-# @app.function(image=bitcoind_image, volumes={"/root/.bitcoin": bitcoin_data_vol},)
-# def get_tunnel_url():
-#     try:
-#         with open("/root/.bitcoin/xyz.txt", "r") as f:
-#             tunnel_url = f.read().strip()
-#             print(f"✅ 读取的 Tunnel URL: {tunnel_url}")
-#             return tunnel_url
-#     except FileNotFoundError:
-#         print("⚠️ 文件不存在，无法读取 Tunnel URL！")
 
-@app.function(image=bitcoind_image)
+@app.function(**function_params)
 def get_latest_block():
-    bitcoin_data_vol.reload()  # ✅ 先确保 Volume 最新
-    with open("/root/.bitcoin/tunnel_url.txt", "r") as f:
-            rpc_url = f.read().strip()
-            print(f"✅ 读取 Tunnel URL: {rpc_url}")
-    response = requests.post(
-        rpc_url,
-        auth=(rpc_user, rpc_password),
-        json={
-            "jsonrpc": "1.0",
-            "id": "getbestblockhash",
-            "method": "getbestblockhash",
-            "params": []
-        }
-    )
+    rpc_url = read_tunnel_url()
+    response = send_rpc_request(rpc_url, "getbestblockhash")
     best_block_hash = response.json().get("result")
 
     if best_block_hash:
-        response = requests.post(
-            rpc_url,
-            auth=(rpc_user, rpc_password),
-            json={
-                "jsonrpc": "1.0",
-                "id": "getblock",
-                "method": "getblock",
-                "params": [best_block_hash, 2]
-            }
-        )
+        response = send_rpc_request(rpc_url, "getblock", [best_block_hash, 2])
         print(response.json())
         return response.json()
 
     return {"error": "Failed to fetch block hash"}
 
-@app.function(image=bitcoind_image, volumes={"/root/.bitcoin": bitcoin_data_vol},)
+@app.function(**function_params)
 def get_block_count():
-    
-    bitcoin_data_vol.reload()  # ✅ 先确保 Volume 最新
-    with open("/root/.bitcoin/tunnel_url.txt", "r") as f:
-            rpc_url = f.read().strip()
-            print(f"✅ 读取 Tunnel URL: {rpc_url}")
-    # ✅ 发送 RPC 请求
-    payload = {
-        "jsonrpc": "1.0",
-        "id": "getblockcount",
-        "method": "getblockcount",
-        "params": []
-    }
-    response = requests.post(
-            rpc_url,
-            auth=(rpc_user, rpc_password),
-            json=payload
-        )
-
-        # ✅ 解析结果
+    rpc_url = read_tunnel_url()
+    response = send_rpc_request(rpc_url, "getblockcount")
+    # ✅ 解析结果
     if response.status_code == 200:
         block_height = response.json()["result"]
         print(f"✅ Latest Block Height: {block_height}")
