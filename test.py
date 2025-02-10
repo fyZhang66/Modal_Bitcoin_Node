@@ -11,7 +11,9 @@ bitcoin_data_vol = modal.Volume.from_name("bitcoin-fy-data")
 # 这里从同目录下的 Dockerfile 构建镜像（该 Dockerfile 用 wget 下载 bitcoin tarball 并解压）
 bitcoind_image = modal.Image.from_dockerfile("./Dockerfile")
 
-
+rpc_url = "https://3lozw8f1z7v595.r21.modal.host"
+rpc_user = "bitcoinrpc"
+rpc_password = "supersecurepassword"
 
 @app.function(
     image=bitcoind_image,
@@ -44,10 +46,6 @@ def run_bitcoind():
 
 @app.function(image=bitcoind_image)
 def get_latest_block():
-    rpc_url = "https://u897insx1hr7by.r21.modal.host"
-    rpc_user = "bitcoinrpc"
-    rpc_password = "supersecurepassword"
-
     response = requests.post(
         rpc_url,
         auth=(rpc_user, rpc_password),
@@ -76,7 +74,29 @@ def get_latest_block():
 
     return {"error": "Failed to fetch block hash"}
 
+@app.function(image=bitcoind_image)
+def get_block_count():
+    # ✅ 发送 RPC 请求
+    payload = {
+        "jsonrpc": "1.0",
+        "id": "getblockcount",
+        "method": "getblockcount",
+        "params": []
+    }
+    response = requests.post(
+            rpc_url,
+            auth=(rpc_user, rpc_password),
+            json=payload
+        )
 
+        # ✅ 解析结果
+    if response.status_code == 200:
+        block_height = response.json()["result"]
+        print(f"✅ Latest Block Height: {block_height}")
+        return block_height
+    else:
+        print(f"❌ RPC Error: {response.text}")
+        return None
 
 @app.local_entrypoint()
 def main():
