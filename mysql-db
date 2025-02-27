@@ -1,0 +1,26 @@
+FROM mysql:8.0
+
+# Switch to root to install packages
+USER root
+
+# 1) Update packages and install Python 3 + pip via microdnf
+RUN microdnf update && \
+    microdnf install -y python3 python3-pip && \
+    rm -rf /var/cache/yum
+
+# 2) Create a symbolic link so we can call `python`
+RUN ln -snf /usr/bin/python3 /usr/bin/python
+
+# 3) (Optional) Install additional Python packages
+RUN python -m pip install --upgrade pip && \
+    pip install fastapi uvicorn requests
+
+# 4) Optionally copy your .sql scripts so MySQL runs them at container startup
+COPY block_info_schema.sql /docker-entrypoint-initdb.d/
+
+# 5) Expose the MySQL port
+EXPOSE 3306
+
+# MySQL’s default entrypoint: docker-entrypoint.sh
+# MySQL’s default CMD: mysqld
+# No need to override them if you're just running MySQL.
